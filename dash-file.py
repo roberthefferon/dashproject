@@ -1,3 +1,4 @@
+# Importing libraries
 import os
 import dash
 import requests
@@ -12,18 +13,23 @@ url = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us.csv"
 download = requests.get(url).content
 df_us = pd.read_csv(io.StringIO(download.decode('utf-8')))
 
-df_us['case_day'] = df_us['cases'].diff()
-df_us.loc[0, 'case_day'] = 1
-df_us['case_day'] =  df_us['case_day'].astype('int')
+df_us['cases_per_day'] = df_us['cases'].diff()
+df_us.loc[0, 'cases_per_day'] = 1
+df_us['cases_per_day'] =  df_us['cases_per_day'].astype('int')
+
+df_us['deaths_per_day'] = df_us['deaths'].diff()
+df_us.loc[0, 'deaths_per_day'] = 0
+df_us['deaths_per_day'] =  df_us['deaths_per_day'].astype('int')
+df_us['deaths_per_day'] = df_us['deaths_per_day'].abs()
 
 url = "https://raw.githubusercontent.com/jagansingh93/covid_data/main/Weekly_United_States_COVID-19_Cases_and_Deaths_by_State.csv"
 download = requests.get(url).content
 df_state = pd.read_csv(io.StringIO(download.decode('utf-8')))
-df_state.loc[df_state.new_cases  < 0,'new_cases'] = df_state.loc[df_state.new_cases  < 0,'new_cases'].abs()
+df_state['new_cases'] = df_state['new_cases'].abs()
 
-def covid_cases():
-    fig = px.line(x = df_us['date'], y = df_us['case_day'])
-    fig.update_layout(title = 'COVID-19 cases in US', xaxis_title = 'Date', yaxis_title = 'Cases' )
+def covid_cases(name):
+    fig = px.line(x = df_us['date'], y = df_us[name])
+    fig.update_layout(title = 'COVID-19 cases in US')
     return fig
 
 def states_map():
@@ -39,19 +45,22 @@ app.layout = html.Div([
     html.Div(id='page-content')
 ])
 
-index_page = html.Div([
+home_page = html.Div([
     html.H1('COVID DASHBOARD'),
-    dcc.Link('New Covid cases US', href='/page-1'),
+    dcc.Dropdown(list(df_us.drop(columns = ['date']).columns), 'cases', id= 'dropdown'),
+    dcc.Graph(id = 'graph'),
     html.Br(),
-    dcc.Link('State wise new cases', href='/page-2'),
+    dcc.Link('State wise new cases', href='/state_wise', id = 'button')
 ])
 
-page_1_layout = html.Div([
-    html.H1('New Covid cases US'),
-    dcc.Graph(id = 'line_plot', figure = covid_cases())
-])
+@app.callback(
+    Output('graph', 'figure'),
+    Input('dropdown', 'value')
+)
+def update_output(value):
+    return covid_cases(value)
 
-page_2_layout = html.Div([
+state_wise_layout = html.Div([
     html.H1('New Covid cases US'),
     dcc.Graph(id = 'map', figure = states_map())
 ])
@@ -59,12 +68,10 @@ page_2_layout = html.Div([
 @callback(Output('page-content', 'children'),
               [Input('url', 'pathname')])
 def display_page(pathname):
-    if pathname == '/page-1':
-        return page_1_layout
-    elif pathname == '/page-2':
-        return page_2_layout
+    if pathname == '/state_wise':
+        return state_wise_layout
     else:
-        return index_page
+        return home_page
 
 if __name__ == '__main__':
     app.run_server()
